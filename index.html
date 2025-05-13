@@ -1,29 +1,227 @@
-
+<!DOCTYPE html>
 <html>
-    <head>
-	    <title>Object Finder Web App</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
-        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
-  
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.0.0/p5.js"></script>
-  
-        <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
-    
-        <link rel="stylesheet" type="text/css" href="style.css">
-    </head>
-    <body background="https://wallpaperaccess.com/full/2024142.jpg">
-        <center>
-            <h1 class="btn btn-info header">AI Object Finder<br><p>The input name which you will give should match the names present in CoCo model then only it will detect</p></h1>
-            <h3 class="object_name_label">Object Name :</h3>
-            <input class="input_class" id="input_id">
-            <br>
-            <button class="btn btn-success" id="start_button_id" onclick="start()">Start</button>
-            <br>
-            <h3 class="btn btn-danger" id="status"></h3>
-            <h3 class="btn btn-warning" id="object_found"></h3>
-        </center>
-        <script src="main.js"></script>
-    </body>
+<head>
+  <title>Grow a Garden Shop</title>
+  <style>
+    body { text-align: center; font-family: sans-serif; background: #d4f4d7; }
+    canvas { border: 2px solid #333; margin-top: 20px; background: #a4de89; }
+    .shop { margin-top: 20px; }
+    .shop button { margin: 5px; padding: 10px; font-size: 16px; }
+    #coins { font-size: 18px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Grow a Garden 🌱</h1>
+  <p>Click a dirt patch to plant or water. Click again to harvest when grown!</p>
+  <canvas id="garden" width="400" height="400"></canvas>
+  <div class="shop">
+    <h2>Seed Shop 🌾</h2>
+    <div id="shop-buttons"></div>
+    <div id="coins">Coins: $0</div>
+    <div id="selected">Selected Seed: Basic</div>
+    <h3>Inventory 🧺</h3>
+    <div id="inventory">None</div>
+    <h3>Sell Harvest 🛒</h3>
+    <div id="sell-buttons"></div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("garden");
+    const ctx = canvas.getContext("2d");
+    const gridSize = 5;
+    const tileSize = 80;
+
+    let coins = 0;
+    let selectedSeed = "basic";
+    let inventory = { basic: Infinity, fast: 0, golden: 0, rare: 0, super: 0, magic: 0, mythical: 0, wild: 0, premium: 0, ultra: 0 };
+    let harvestInventory = {};
+
+    const seeds = {
+      basic: { growTime: 3, reward: 5, color: "#9ACD32", price: 0 },
+      fast: { growTime: 2, reward: 30, color: "#32CD32", price: 20 },
+      golden: { growTime: 1, reward: 40, color: "#FFD700", price: 50 },
+      rare: { growTime: 4, reward: 35, color: "#8A2BE2", price: 100 },
+      super: { growTime: 2, reward: 40, color: "#FF4500", price: 120 },
+      magic: { growTime: 3, reward: 50, color: "#00BFFF", price: 150 },
+      mythical: { growTime: 5, reward: 60, color: "#DA70D6", price: 200 },
+      wild: { growTime: 4, reward: 25, color: "#006400", price: 75 },
+      premium: { growTime: 1, reward: 80, color: "#FFD700", price: 250 },
+      ultra: { growTime: 6, reward: 120, color: "#FF1493", price: 500 }
+    };
+
+    let availableShopSeeds = ["basic"];
+
+    let garden = [];
+    for (let i = 0; i < gridSize; i++) {
+      garden[i] = [];
+      for (let j = 0; j < gridSize; j++) {
+        garden[i][j] = { stage: 0, watered: false, type: null, time: 0 };
+      }
+    }
+
+    function drawGarden() {
+      for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+          let plot = garden[i][j];
+          if (plot.stage === 0) {
+            ctx.fillStyle = "#8B4513";
+          } else if (plot.stage >= 1 && plot.stage < 3) {
+            ctx.fillStyle = seeds[plot.type].color;
+          } else if (plot.stage === 3) {
+            ctx.fillStyle = "#006400";
+          }
+          ctx.fillRect(j * tileSize, i * tileSize, tileSize - 2, tileSize - 2);
+
+          if (plot.watered) {
+            ctx.fillStyle = "#00BFFF";
+            ctx.beginPath();
+            ctx.arc(j * tileSize + 10, i * tileSize + 10, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+      document.getElementById("coins").innerText = `Coins: $${coins}`;
+      document.getElementById("selected").innerText = `Selected Seed: ${selectedSeed.charAt(0).toUpperCase() + selectedSeed.slice(1)}`;
+      let invList = Object.keys(harvestInventory).map(key => `${key}: ${harvestInventory[key]}`).join(", ");
+      document.getElementById("inventory").innerText = invList || "None";
+      drawSellButtons();
+      drawShopButtons();
+    }
+
+    function drawSellButtons() {
+      const container = document.getElementById("sell-buttons");
+      container.innerHTML = "";
+      for (let crop in harvestInventory) {
+        if (harvestInventory[crop] > 0) {
+          const btn = document.createElement("button");
+          btn.innerText = `Sell 1 ${crop.charAt(0).toUpperCase() + crop.slice(1)} ($${seeds[crop].reward})`;
+          btn.onclick = () => sellCrop(crop);
+          container.appendChild(btn);
+        }
+      }
+    }
+
+    function drawShopButtons() {
+      const shop = document.getElementById("shop-buttons");
+      shop.innerHTML = "";
+      availableShopSeeds.forEach(type => {
+        const btn = document.createElement("button");
+        btn.innerText = `Buy ${type.charAt(0).toUpperCase() + type.slice(1)} Seed ($${seeds[type].price})`;
+        btn.onclick = () => buySeed(type);
+        shop.appendChild(btn);
+      });
+    }
+
+    function randomizeShop() {
+      const allTypes = Object.keys(seeds).filter(s => s !== "basic");
+      availableShopSeeds = ["basic"];
+      while (availableShopSeeds.length < 10) {
+        const pick = allTypes[Math.floor(Math.random() * allTypes.length)];
+        if (!availableShopSeeds.includes(pick)) availableShopSeeds.push(pick);
+      }
+      drawShopButtons();
+    }
+
+    setInterval(randomizeShop, 60000); // every minute
+
+    // Modified to include a random range for selling price
+    function sellCrop(crop) {
+      if (harvestInventory[crop] > 0) {
+        const baseReward = seeds[crop].reward;
+        const randomReward = baseReward + Math.floor(Math.random() * 21) - 10; // Adds a random amount between -10 and +10 to the base reward
+        coins += randomReward;
+        harvestInventory[crop]--;
+        if (harvestInventory[crop] === 0) delete harvestInventory[crop];
+        drawGarden();
+      }
+    }
+
+    function plantOrInteract(x, y) {
+      let row = Math.floor(y / tileSize);
+      let col = Math.floor(x / tileSize);
+      let plot = garden[row][col];
+
+      if (plot.stage === 0 && inventory[selectedSeed] > 0) {
+        plot.stage = 1;
+        plot.type = selectedSeed;
+        plot.time = 0;
+        inventory[selectedSeed]--;
+      } else if (plot.stage > 0 && plot.stage < 3 && !plot.watered) {
+        plot.watered = true;
+      } else if (plot.stage === 3) {
+        if (!harvestInventory[plot.type]) harvestInventory[plot.type] = 0;
+        harvestInventory[plot.type]++;
+        plot.stage = 0;
+        plot.type = null;
+        plot.watered = false;
+        plot.time = 0;
+      }
+    }
+
+    function growPlants() {
+      for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+          let plot = garden[i][j];
+          if (plot.stage > 0 && plot.stage < 3 && plot.watered) {
+            plot.time++;
+            if (plot.time >= seeds[plot.type].growTime) {
+              plot.stage = 3;
+              plot.watered = false;
+            } else {
+              plot.watered = false;
+            }
+          }
+        }
+      }
+    }
+
+    function buySeed(type) {
+      const price = seeds[type].price;
+      if (coins >= price) {
+        coins -= price;
+        if (!inventory[type]) inventory[type] = 0;
+        inventory[type]++;
+        selectedSeed = type;
+        drawGarden();
+      }
+    }
+
+    function selectSeed(type) {
+      if (inventory[type] > 0 || type === "basic") {
+        selectedSeed = type;
+        drawGarden();
+      }
+    }
+
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      plantOrInteract(x, y);
+      drawGarden();
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "1") selectedSeed = "basic";
+      if (e.key === "2" && inventory["fast"] > 0) selectedSeed = "fast";
+      if (e.key === "3" && inventory["golden"] > 0) selectedSeed = "golden";
+      if (e.key === "4" && inventory["rare"] > 0) selectedSeed = "rare";
+      if (e.key === "5" && inventory["super"] > 0) selectedSeed = "super";
+      if (e.key === "6" && inventory["magic"] > 0) selectedSeed = "magic";
+      if (e.key === "7" && inventory["mythical"] > 0) selectedSeed = "mythical";
+      if (e.key === "8" && inventory["wild"] > 0) selectedSeed = "wild";
+      if (e.key === "9" && inventory["premium"] > 0) selectedSeed = "premium";
+      if (e.key === "0" && inventory["ultra"] > 0) selectedSeed = "ultra";
+      drawGarden();
+    });
+
+    setInterval(() => {
+      growPlants();
+      drawGarden();
+    }, 3000);
+
+    randomizeShop();
+    drawGarden();
+  </script>
+</body>
 </html>
